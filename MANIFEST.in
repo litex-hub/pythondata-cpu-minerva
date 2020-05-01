@@ -1,0 +1,2 @@
+graft pythondata_cpu_minerva/sources/
+global-exclude *.py[cod]
