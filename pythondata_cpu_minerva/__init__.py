@@ -4,35 +4,36 @@ data_location = os.path.join(__dir__, "sources")
 src = "http://github.com/lambdaconcept/minerva"
 
 # Module version
-version_str = "0.0.post135"
-version_tuple = (0, 0, 135)
+version_str = "0.0.post147"
+version_tuple = (0, 0, 147)
 try:
     from packaging.version import Version as V
-    pversion = V("0.0.post135")
+    pversion = V("0.0.post147")
 except ImportError:
     pass
 
 # Data version info
-data_version_str = "0.0.post84"
-data_version_tuple = (0, 0, 84)
+data_version_str = "0.0.post96"
+data_version_tuple = (0, 0, 96)
 try:
     from packaging.version import Version as V
-    pdata_version = V("0.0.post84")
+    pdata_version = V("0.0.post96")
 except ImportError:
     pass
-data_git_hash = "d06b5d2fd354cad3040f0efaf58b2f206395b7d0"
-data_git_describe = "v0.0-84-gd06b5d2"
+data_git_hash = "53251badb3fe8fae45e30b7e64c38489dde08af9"
+data_git_describe = "v0.0-96-g53251ba"
 data_git_msg = """\
-commit d06b5d2fd354cad3040f0efaf58b2f206395b7d0
+commit 53251badb3fe8fae45e30b7e64c38489dde08af9
 Author: Jean-François Nguyen <jf@lambdaconcept.com>
-Date:   Wed Apr 1 23:55:41 2020 +0200
+Date:   Tue May 5 20:01:26 2020 +0200
 
-    Revert "Use nmigen_soc.wishbone.Interface."
+    debug: unbreak the debug unit.
     
-    This reverts commit 8c4d4eb3f74786bc44a721a9c9ce28cf37ee8cf4.
+    * fix a logic loop between `exception.m_ebreak` and `trigger.trap`
+    * correctly add DCSR and DPC to the register file
+    * fix some timing issues
     
-    The PyPI release of nmigen-soc doesn't allow nmigen versions above 0.1.
-    We will wait for a new release before merging 8c4d4eb3f.
+    Fixes #8.
 
 """
 
