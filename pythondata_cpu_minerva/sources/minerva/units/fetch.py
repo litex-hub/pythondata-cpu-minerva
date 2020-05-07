@@ -32,20 +32,28 @@ class PCSelector(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        with m.If(self.m_exception & self.m_valid):
-            m.d.comb += self.a_pc.eq(self.mtvec_r_base << 2)
-        with m.Elif(self.m_mret & self.m_valid):
-            m.d.comb += self.a_pc.eq(self.mepc_r_base << 2)
-        with m.Elif(self.m_branch_predict_taken & ~self.m_branch_taken & self.m_valid):
-            m.d.comb += self.a_pc.eq(self.x_pc)
-        with m.Elif(~self.m_branch_predict_taken & self.m_branch_taken & self.m_valid):
-            m.d.comb += self.a_pc.eq(self.m_branch_target),
-        with m.Elif(self.x_fence_i & self.x_valid):
-            m.d.comb += self.a_pc.eq(self.d_pc)
-        with m.Elif(self.d_branch_predict_taken & self.d_valid):
-            m.d.comb += self.a_pc.eq(self.d_branch_target),
+        m_sel  = Signal(reset=1)
+        m_a_pc = Signal(32)
+
+        with m.If(self.m_exception):
+            m.d.comb += m_a_pc[2:].eq(self.mtvec_r_base)
+        with m.Elif(self.m_mret):
+            m.d.comb += m_a_pc[2:].eq(self.mepc_r_base)
+        with m.Elif(self.m_branch_predict_taken & ~self.m_branch_taken):
+            m.d.comb += m_a_pc[2:].eq(self.x_pc[2:])
+        with m.Elif(~self.m_branch_predict_taken & self.m_branch_taken):
+            m.d.comb += m_a_pc[2:].eq(self.m_branch_target[2:]),
         with m.Else():
-            m.d.comb += self.a_pc.eq(self.f_pc + 4)
+            m.d.comb += m_sel.eq(0)
+
+        with m.If(m_sel & self.m_valid):
+            m.d.comb += self.a_pc[2:].eq(m_a_pc[2:])
+        with m.Elif(self.x_fence_i & self.x_valid):
+            m.d.comb += self.a_pc[2:].eq(self.d_pc[2:])
+        with m.Elif(self.d_branch_predict_taken & self.d_valid):
+            m.d.comb += self.a_pc[2:].eq(self.d_branch_target[2:]),
+        with m.Else():
+            m.d.comb += self.a_pc[2:].eq(self.f_pc[2:] + 1)
 
         return m
 
@@ -62,7 +70,7 @@ class FetchUnitInterface:
 
         self.a_busy = Signal()
         self.f_busy = Signal()
-        self.f_instruction = Signal(32)
+        self.f_instruction = Signal(32, reset=0x00000013) # nop (addi x0, x0, 0)
         self.f_fetch_error = Signal()
         self.f_badaddr = Signal(30)
 
@@ -97,10 +105,7 @@ class BareFetchUnit(FetchUnitInterface, Elaboratable):
         m.d.comb += self.a_busy.eq(self.ibus.cyc)
 
         with m.If(self.f_fetch_error):
-            m.d.comb += [
-                self.f_busy.eq(0),
-                self.f_instruction.eq(0x00000013) # nop (addi x0, x0, 0)
-            ]
+            m.d.comb += self.f_busy.eq(0)
         with m.Else():
             m.d.comb += [
                 self.f_busy.eq(self.ibus.cyc),
@@ -116,8 +121,8 @@ class CachedFetchUnit(FetchUnitInterface, Elaboratable):
 
         self.icache_args = icache_args
 
-        self.a_flush = Signal()
         self.f_pc = Signal(32)
+        self.a_flush = Signal()
 
     def elaborate(self, platform):
         m = Module()
@@ -125,21 +130,43 @@ class CachedFetchUnit(FetchUnitInterface, Elaboratable):
         icache = m.submodules.icache = L1Cache(*self.icache_args)
 
         a_icache_select = Signal()
-        f_icache_select = Signal()
 
-        m.d.comb += a_icache_select.eq((self.a_pc >= icache.base) & (self.a_pc < icache.limit))
+        # Test whether the target address is inside the L1 cache region. We use bit masks in order
+        # to avoid carry chains from arithmetic comparisons. This restricts the region boundaries
+        # to powers of 2.
+        with m.Switch(self.a_pc[2:]):
+            def addr_below(limit):
+                assert limit in range(1, 2**30 + 1)
+                range_bits = log2_int(limit)
+                const_bits = 30 - range_bits
+                return "{}{}".format("0" * const_bits, "-" * range_bits)
+
+            if icache.base >= 4:
+                with m.Case(addr_below(icache.base >> 2)):
+                    m.d.comb += a_icache_select.eq(0)
+            with m.Case(addr_below(icache.limit >> 2)):
+                m.d.comb += a_icache_select.eq(1)
+            with m.Default():
+                m.d.comb += a_icache_select.eq(0)
+
+        f_icache_select = Signal()
+        f_flush = Signal()
+
         with m.If(~self.a_stall):
-            m.d.sync += f_icache_select.eq(a_icache_select)
+            m.d.sync += [
+                f_icache_select.eq(a_icache_select),
+                f_flush.eq(self.a_flush),
+            ]
 
         m.d.comb += [
             icache.s1_addr.eq(self.a_pc[2:]),
-            icache.s1_flush.eq(self.a_flush),
             icache.s1_stall.eq(self.a_stall),
-            icache.s1_valid.eq(self.a_valid & a_icache_select),
+            icache.s1_valid.eq(self.a_valid),
             icache.s2_addr.eq(self.f_pc[2:]),
-            icache.s2_re.eq(Const(1)),
+            icache.s2_re.eq(f_icache_select),
             icache.s2_evict.eq(Const(0)),
-            icache.s2_valid.eq(self.f_valid & f_icache_select)
+            icache.s2_flush.eq(f_flush),
+            icache.s2_valid.eq(self.f_valid),
         ]
 
         ibus_arbiter = m.submodules.ibus_arbiter = WishboneArbiter()
@@ -173,6 +200,8 @@ class CachedFetchUnit(FetchUnitInterface, Elaboratable):
                 bare_port.adr.eq(self.a_pc[2:])
             ]
 
+        m.d.comb += self.a_busy.eq(bare_port.cyc)
+
         with m.If(self.ibus.cyc & self.ibus.err):
             m.d.sync += [
                 self.f_fetch_error.eq(1),
@@ -181,19 +210,13 @@ class CachedFetchUnit(FetchUnitInterface, Elaboratable):
         with m.Elif(~self.f_stall):
             m.d.sync += self.f_fetch_error.eq(0)
 
-        with m.If(a_icache_select):
-            m.d.comb += self.a_busy.eq(0)
-        with m.Else():
-            m.d.comb += self.a_busy.eq(bare_port.cyc)
-
-        with m.If(self.f_fetch_error):
-            m.d.comb += [
-                self.f_busy.eq(0),
-                self.f_instruction.eq(0x00000013) # nop (addi x0, x0, 0)
-            ]
+        with m.If(f_flush):
+            m.d.comb += self.f_busy.eq(~icache.s2_flush_ack)
+        with m.Elif(self.f_fetch_error):
+            m.d.comb += self.f_busy.eq(0)
         with m.Elif(f_icache_select):
             m.d.comb += [
-                self.f_busy.eq(icache.s2_re & icache.s2_miss),
+                self.f_busy.eq(icache.s2_miss),
                 self.f_instruction.eq(icache.s2_rdata)
             ]
         with m.Else():
