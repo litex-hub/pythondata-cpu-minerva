@@ -31,7 +31,7 @@ with open(data_file(my_data_file)) as f:
 ```
 
 
-The data files come from http://github.com/lambdaconcept/minerva
+The data files come from https://github.com/lambdaconcept/minerva
 and are imported using `git subtrees` to the directory
 [pythondata_cpu_minerva/sources](pythondata_cpu_minerva/sources).
 
