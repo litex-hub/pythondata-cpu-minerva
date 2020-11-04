@@ -4,45 +4,39 @@ data_location = os.path.join(__dir__, "sources")
 src = "https://github.com/lambdaconcept/minerva"
 
 # Module version
-version_str = "0.0.post156"
-version_tuple = (0, 0, 156)
+version_str = "0.0.post164"
+version_tuple = (0, 0, 164)
 try:
     from packaging.version import Version as V
-    pversion = V("0.0.post156")
+    pversion = V("0.0.post164")
 except ImportError:
     pass
 
 # Data version info
-data_version_str = "0.0.post96"
-data_version_tuple = (0, 0, 96)
+data_version_str = "0.0.post98"
+data_version_tuple = (0, 0, 98)
 try:
     from packaging.version import Version as V
-    pdata_version = V("0.0.post96")
+    pdata_version = V("0.0.post98")
 except ImportError:
     pass
-data_git_hash = "53251badb3fe8fae45e30b7e64c38489dde08af9"
-data_git_describe = "v0.0-96-g53251ba"
+data_git_hash = "536d6c3ac175cd946777f3dd5b64339552f0130a"
+data_git_describe = "v0.0-98-g536d6c3"
 data_git_msg = """\
-commit 53251badb3fe8fae45e30b7e64c38489dde08af9
+commit 536d6c3ac175cd946777f3dd5b64339552f0130a
 Author: Jean-François Nguyen <jf@lambdaconcept.com>
-Date:   Tue May 5 20:01:26 2020 +0200
+Date:   Wed Sep 9 14:29:00 2020 +0200
 
-    debug: unbreak the debug unit.
-    
-    * fix a logic loop between `exception.m_ebreak` and `trigger.trap`
-    * correctly add DCSR and DPC to the register file
-    * fix some timing issues
-    
-    Fixes #8.
+    Update README.
 
 """
 
 # Tool version info
-tool_version_str = "0.0.post60"
-tool_version_tuple = (0, 0, 60)
+tool_version_str = "0.0.post66"
+tool_version_tuple = (0, 0, 66)
 try:
     from packaging.version import Version as V
-    ptool_version = V("0.0.post60")
+    ptool_version = V("0.0.post66")
 except ImportError:
     pass
 
