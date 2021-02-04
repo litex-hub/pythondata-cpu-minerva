@@ -4,39 +4,39 @@ data_location = os.path.join(__dir__, "sources")
 src = "https://github.com/lambdaconcept/minerva"
 
 # Module version
-version_str = "0.0.post164"
-version_tuple = (0, 0, 164)
+version_str = "0.0.post171"
+version_tuple = (0, 0, 171)
 try:
     from packaging.version import Version as V
-    pversion = V("0.0.post164")
+    pversion = V("0.0.post171")
 except ImportError:
     pass
 
 # Data version info
-data_version_str = "0.0.post98"
-data_version_tuple = (0, 0, 98)
+data_version_str = "0.0.post99"
+data_version_tuple = (0, 0, 99)
 try:
     from packaging.version import Version as V
-    pdata_version = V("0.0.post98")
+    pdata_version = V("0.0.post99")
 except ImportError:
     pass
-data_git_hash = "536d6c3ac175cd946777f3dd5b64339552f0130a"
-data_git_describe = "v0.0-98-g536d6c3"
+data_git_hash = "0b5f6b2466367f262f9a16a83f9c86fc7f008edf"
+data_git_describe = "v0.0-99-g0b5f6b2"
 data_git_msg = """\
-commit 536d6c3ac175cd946777f3dd5b64339552f0130a
+commit 0b5f6b2466367f262f9a16a83f9c86fc7f008edf
 Author: Jean-François Nguyen <jf@lambdaconcept.com>
-Date:   Wed Sep 9 14:29:00 2020 +0200
+Date:   Fri Jan 22 15:20:35 2021 +0100
 
-    Update README.
+    fetch: workaround YosysHQ/yosys#2035.
 
 """
 
 # Tool version info
-tool_version_str = "0.0.post66"
-tool_version_tuple = (0, 0, 66)
+tool_version_str = "0.0.post72"
+tool_version_tuple = (0, 0, 72)
 try:
     from packaging.version import Version as V
-    ptool_version = V("0.0.post66")
+    ptool_version = V("0.0.post72")
 except ImportError:
     pass
 
