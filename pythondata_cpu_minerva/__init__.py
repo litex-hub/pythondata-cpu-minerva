@@ -4,11 +4,11 @@ data_location = os.path.join(__dir__, "sources")
 src = "https://github.com/lambdaconcept/minerva"
 
 # Module version
-version_str = "0.0.post186"
-version_tuple = (0, 0, 186)
+version_str = "0.0.post187"
+version_tuple = (0, 0, 187)
 try:
     from packaging.version import Version as V
-    pversion = V("0.0.post186")
+    pversion = V("0.0.post187")
 except ImportError:
     pass
 
@@ -32,11 +32,11 @@ Date:   Fri Jan 22 15:20:35 2021 +0100
 """
 
 # Tool version info
-tool_version_str = "0.0.post87"
-tool_version_tuple = (0, 0, 87)
+tool_version_str = "0.0.post88"
+tool_version_tuple = (0, 0, 88)
 try:
     from packaging.version import Version as V
-    ptool_version = V("0.0.post87")
+    ptool_version = V("0.0.post88")
 except ImportError:
     pass
 
