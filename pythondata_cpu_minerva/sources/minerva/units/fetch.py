@@ -73,7 +73,7 @@ class FetchUnitInterface:
 
         self.a_busy = Signal()
         self.f_busy = Signal()
-        self.f_instruction = Signal(32, reset=0x00000013) # nop (addi x0, x0, 0)
+        self.f_instruction = Signal(32)
         self.f_fetch_error = Signal()
         self.f_badaddr = Signal(30)
 
@@ -109,7 +109,10 @@ class BareFetchUnit(FetchUnitInterface, Elaboratable):
         m.d.comb += self.a_busy.eq(self.ibus.cyc)
 
         with m.If(self.f_fetch_error):
-            m.d.comb += self.f_busy.eq(0)
+            m.d.comb += [
+                self.f_busy.eq(0),
+                self.f_instruction.eq(0x00000013), # nop (addi x0, x0, 0)
+            ]
         with m.Else():
             m.d.comb += [
                 self.f_busy.eq(self.ibus.cyc),
@@ -120,10 +123,16 @@ class BareFetchUnit(FetchUnitInterface, Elaboratable):
 
 
 class CachedFetchUnit(FetchUnitInterface, Elaboratable):
-    def __init__(self, *icache_args):
+    def __init__(self, *, icache_nways, icache_nlines, icache_nwords, icache_base, icache_limit):
         super().__init__()
 
-        self.icache_args = icache_args
+        self._icache = L1Cache(
+            nways  = icache_nways,
+            nlines = icache_nlines,
+            nwords = icache_nwords,
+            base   = icache_base,
+            limit  = icache_limit
+        )
 
         self.f_pc = Signal(32)
         self.a_flush = Signal()
@@ -131,27 +140,32 @@ class CachedFetchUnit(FetchUnitInterface, Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        icache = m.submodules.icache = L1Cache(*self.icache_args)
+        m.submodules.icache = self._icache
 
         a_icache_select = Signal()
 
-        # Test whether the target address is inside the L1 cache region. We use bit masks in order
-        # to avoid carry chains from arithmetic comparisons. This restricts the region boundaries
-        # to powers of 2.
-        with m.Switch(self.a_pc[2:]):
-            def addr_below(limit):
-                assert limit in range(1, 2**30 + 1)
-                range_bits = log2_int(limit)
-                const_bits = 30 - range_bits
-                return "{}{}".format("0" * const_bits, "-" * range_bits)
+        # Test whether the target address is inside the L1 cache region. We use a bit mask in order
+        # to avoid carry chains from arithmetic comparisons. To this end, the base and limit
+        # addresses of the cached region must satisfy the following constraints:
+        # 1) the region size (i.e. ``limit - base``) must be a power of 2
+        # 2) ``base`` must be a multiple of the region size
 
-            if icache.base >= 4:
-                with m.Case(addr_below(icache.base >> 2)):
-                    m.d.comb += a_icache_select.eq(0)
-            with m.Case(addr_below(icache.limit >> 2)):
-                m.d.comb += a_icache_select.eq(1)
-            with m.Default():
-                m.d.comb += a_icache_select.eq(0)
+        def addr_between(base, limit):
+            assert base  in range(0, 2**30 + 1)
+            assert limit in range(0, 2**30 + 1)
+            assert limit >= base
+            assert base % (limit - base) == 0
+            addr_width = log2_int(limit - base, need_pow2=True)
+            const_bits = 30 - addr_width
+            if const_bits > 0:
+                const_pat = "{:0{}b}".format(base >> addr_width, const_bits)
+            else:
+                const_pat = ""
+            return "{}{}".format(const_pat, "-" * addr_width)
+
+        icache_pattern = addr_between(self._icache.base >> 2, self._icache.limit >> 2)
+        with m.If(self.a_pc[2:].matches(icache_pattern)):
+            m.d.comb += a_icache_select.eq(1)
 
         f_icache_select = Signal()
         f_flush = Signal()
@@ -163,14 +177,14 @@ class CachedFetchUnit(FetchUnitInterface, Elaboratable):
             ]
 
         m.d.comb += [
-            icache.s1_addr.eq(self.a_pc[2:]),
-            icache.s1_stall.eq(self.a_stall),
-            icache.s1_valid.eq(self.a_valid),
-            icache.s2_addr.eq(self.f_pc[2:]),
-            icache.s2_re.eq(f_icache_select),
-            icache.s2_evict.eq(Const(0)),
-            icache.s2_flush.eq(f_flush),
-            icache.s2_valid.eq(self.f_valid),
+            self._icache.s1_addr .eq(self.a_pc[2:]),
+            self._icache.s1_stall.eq(self.a_stall),
+            self._icache.s1_valid.eq(self.a_valid),
+            self._icache.s2_addr .eq(self.f_pc[2:]),
+            self._icache.s2_re   .eq(f_icache_select),
+            self._icache.s2_evict.eq(Const(0)),
+            self._icache.s2_flush.eq(f_flush),
+            self._icache.s2_valid.eq(self.f_valid),
         ]
 
         ibus_arbiter = m.submodules.ibus_arbiter = WishboneArbiter()
@@ -178,15 +192,15 @@ class CachedFetchUnit(FetchUnitInterface, Elaboratable):
 
         icache_port = ibus_arbiter.port(priority=0)
         m.d.comb += [
-            icache_port.cyc.eq(icache.bus_re),
-            icache_port.stb.eq(icache.bus_re),
-            icache_port.adr.eq(icache.bus_addr),
+            icache_port.cyc.eq(self._icache.bus_re),
+            icache_port.stb.eq(self._icache.bus_re),
+            icache_port.adr.eq(self._icache.bus_addr),
             icache_port.sel.eq(0b1111),
-            icache_port.cti.eq(Mux(icache.bus_last, Cycle.END, Cycle.INCREMENT)),
-            icache_port.bte.eq(Const(log2_int(icache.nwords) - 1)),
-            icache.bus_valid.eq(icache_port.ack),
-            icache.bus_error.eq(icache_port.err),
-            icache.bus_rdata.eq(icache_port.dat_r)
+            icache_port.cti.eq(Mux(self._icache.bus_last, Cycle.END, Cycle.INCREMENT)),
+            icache_port.bte.eq(Const(log2_int(self._icache.nwords) - 1)),
+            self._icache.bus_valid.eq(icache_port.ack),
+            self._icache.bus_error.eq(icache_port.err),
+            self._icache.bus_rdata.eq(icache_port.dat_r)
         ]
 
         bare_port = ibus_arbiter.port(priority=1)
@@ -217,18 +231,19 @@ class CachedFetchUnit(FetchUnitInterface, Elaboratable):
             m.d.sync += self.f_fetch_error.eq(0)
 
         with m.If(f_flush):
-            m.d.comb += self.f_busy.eq(~icache.s2_flush_ack)
+            m.d.comb += self.f_busy.eq(f_icache_select & ~self._icache.s2_flush_ack)
         with m.Elif(self.f_fetch_error):
             m.d.comb += self.f_busy.eq(0)
         with m.Elif(f_icache_select):
-            m.d.comb += [
-                self.f_busy.eq(icache.s2_miss),
-                self.f_instruction.eq(icache.s2_rdata)
-            ]
+            m.d.comb += self.f_busy.eq(self._icache.s2_miss)
         with m.Else():
-            m.d.comb += [
-                self.f_busy.eq(bare_port.cyc),
-                self.f_instruction.eq(bare_rdata)
-            ]
+            m.d.comb += self.f_busy.eq(bare_port.cyc)
+
+        with m.If(self.f_fetch_error):
+            m.d.comb += self.f_instruction.eq(0x00000013) # nop (addi x0, x0, 0)
+        with m.Elif(f_icache_select):
+            m.d.comb += self.f_instruction.eq(self._icache.s2_rdata)
+        with m.Else():
+            m.d.comb += self.f_instruction.eq(bare_rdata)
 
         return m

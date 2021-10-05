@@ -1,7 +1,9 @@
 from nmigen import *
 from nmigen.asserts import *
 from nmigen.lib.coding import Encoder
-from nmigen.utils import log2_int
+from nmigen.utils import log2_int, bits_for
+
+from .mem import ForwardingMemory
 
 
 __all__ = ["L1Cache"]
@@ -18,17 +20,23 @@ class L1Cache(Elaboratable):
         if nways not in {1, 2}:
             raise ValueError("nways must be 1 or 2, not {!r}".format(nways))
 
-        if not isinstance(base, int):
-            raise TypeError("base must be an integer, not {!r}".format(base))
-        if base not in range(0, 2**32) or base & base - 1:
-            raise ValueError("base must be 0 or a power of 2 (< 2**32), not {:#x}".format(base))
-        if not isinstance(limit, int):
-            raise TypeError("limit must be an integer, not {!r}".format(limit))
-        if limit not in range(1, 2**32 + 1) or limit & limit - 1:
-            raise ValueError("limit must be a power of 2 (<= 2**32), not {:#x}".format(limit))
+        if not isinstance(base, int) or base not in range(0, 2**32):
+            raise ValueError("base must be an integer between {:#x} and {:#x} inclusive, not {!r}"
+                             .format(0, 2**32-1, base))
+        if limit not in range(0, 2**32):
+            raise ValueError("limit must be an integer between {:#x} and {:#x} inclusive, not {!r}"
+                             .format(0, 2**32-1, limit))
+
         if base >= limit:
             raise ValueError("limit {:#x} must be greater than base {:#x}"
                              .format(limit, base))
+        if (limit - base) & (limit - base) - 1:
+            raise ValueError("limit - base must be a power of 2, not {:#x}"
+                             .format(limit - base))
+        if base % (limit - base):
+            raise ValueError("base must be a multiple of limit - base, but {:#x} is not a multiple "
+                             "of {:#x}"
+                             .format(base, limit - base))
 
         self.nways = nways
         self.nlines = nlines
@@ -38,7 +46,7 @@ class L1Cache(Elaboratable):
 
         offsetbits = log2_int(nwords)
         linebits = log2_int(nlines)
-        tagbits = log2_int(limit) - linebits - offsetbits - 2
+        tagbits = bits_for(limit) - linebits - offsetbits - 2
 
         self.s1_addr = Record([("offset", offsetbits), ("line", linebits), ("tag", tagbits)])
         self.s1_stall = Signal()
@@ -108,12 +116,14 @@ class L1Cache(Elaboratable):
 
             with m.State("REFILL"):
                 m.d.comb += self.bus_last.eq(self.bus_addr.offset == last_offset)
-                with m.If(self.bus_valid):
-                    m.d.sync += self.bus_addr.offset.eq(self.bus_addr.offset + 1)
-                with m.If(self.bus_valid & self.bus_last | self.bus_error):
+                with m.If(~self.s1_stall):
                     m.d.sync += self.bus_re.eq(0)
-                with m.If(~self.bus_re & ~self.s1_stall):
                     m.next = "CHECK"
+                with m.Else():
+                    with m.If(self.bus_valid):
+                        m.d.sync += self.bus_addr.offset.eq(self.bus_addr.offset + 1)
+                    with m.If(self.bus_valid & self.bus_last | self.bus_error):
+                        m.d.sync += self.bus_re.eq(0)
 
             with m.State("FLUSH"):
                 with m.If(flush_line == 0):
@@ -126,16 +136,16 @@ class L1Cache(Elaboratable):
             with m.If(Initial()):
                 m.d.comb += Assume(fsm.ongoing("CHECK"))
 
-        for way in ways:
-            tag_mem = Memory(width=1 + len(way.tag), depth=self.nlines)
-            tag_rp = tag_mem.read_port()
-            tag_wp = tag_mem.write_port()
-            m.submodules += tag_rp, tag_wp
+        for i, way in enumerate(ways):
+            tag_mem    = ForwardingMemory(width=1 + len(way.tag), depth=self.nlines)
+            tag_mem_rp = tag_mem.read_port()
+            tag_mem_wp = tag_mem.write_port()
+            m.submodules[f"tag_mem_{i}"] = tag_mem
 
-            data_mem = Memory(width=len(way.data), depth=self.nlines)
-            data_rp = data_mem.read_port()
-            data_wp = data_mem.write_port(granularity=32)
-            m.submodules += data_rp, data_wp
+            dat_mem    = ForwardingMemory(width=len(way.data), depth=self.nlines)
+            dat_mem_rp = dat_mem.read_port()
+            dat_mem_wp = dat_mem.write_port(granularity=32)
+            m.submodules[f"dat_mem_{i}"] = dat_mem
 
             mem_rp_addr = Signal.like(self.s1_addr.line)
             with m.If(self.s1_stall):
@@ -144,35 +154,35 @@ class L1Cache(Elaboratable):
                 m.d.comb += mem_rp_addr.eq(self.s1_addr.line)
 
             m.d.comb += [
-                tag_rp.addr.eq(mem_rp_addr),
-                data_rp.addr.eq(mem_rp_addr),
-                Cat(way.tag, way.valid).eq(tag_rp.data),
-                way.data.eq(data_rp.data),
+                tag_mem_rp.addr.eq(mem_rp_addr),
+                dat_mem_rp.addr.eq(mem_rp_addr),
+                Cat(way.tag, way.valid).eq(tag_mem_rp.data),
+                way.data.eq(dat_mem_rp.data),
             ]
 
             with m.If(fsm.ongoing("FLUSH")):
                 m.d.comb += [
-                    tag_wp.addr.eq(flush_line),
-                    tag_wp.en.eq(1),
-                    tag_wp.data.eq(0),
+                    tag_mem_wp.addr.eq(flush_line),
+                    tag_mem_wp.en.eq(1),
+                    tag_mem_wp.data.eq(0),
                 ]
             with m.Elif(way.bus_re):
                 m.d.comb += [
-                    tag_wp.addr.eq(self.bus_addr.line),
-                    tag_wp.en.eq(way.bus_re & self.bus_valid),
-                    tag_wp.data.eq(Cat(self.bus_addr.tag, self.bus_last & ~self.bus_error)),
+                    tag_mem_wp.addr.eq(self.bus_addr.line),
+                    tag_mem_wp.en.eq(way.bus_re & self.bus_valid),
+                    tag_mem_wp.data.eq(Cat(self.bus_addr.tag, self.bus_last & ~self.bus_error)),
                 ]
             with m.Else():
                 m.d.comb += [
-                    tag_wp.addr.eq(self.s2_addr.line),
-                    tag_wp.en.eq(self.s2_evict & self.s2_valid & (way.tag == self.s2_addr.tag)),
-                    tag_wp.data.eq(0),
+                    tag_mem_wp.addr.eq(self.s2_addr.line),
+                    tag_mem_wp.en.eq(self.s2_evict & self.s2_valid & (way.tag == self.s2_addr.tag)),
+                    tag_mem_wp.data.eq(0),
                 ]
 
             m.d.comb += [
-                data_wp.addr.eq(self.bus_addr.line),
-                data_wp.en.bit_select(self.bus_addr.offset, 1).eq(way.bus_re & self.bus_valid),
-                data_wp.data.eq(Repl(self.bus_rdata, self.nwords)),
+                dat_mem_wp.addr.eq(self.bus_addr.line),
+                dat_mem_wp.en.bit_select(self.bus_addr.offset, 1).eq(way.bus_re & self.bus_valid),
+                dat_mem_wp.data.eq(Repl(self.bus_rdata, self.nwords)),
             ]
 
         return m
