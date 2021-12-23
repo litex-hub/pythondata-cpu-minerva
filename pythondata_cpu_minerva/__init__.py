@@ -4,41 +4,39 @@ data_location = os.path.join(__dir__, "sources")
 src = "https://github.com/lambdaconcept/minerva"
 
 # Module version
-version_str = "0.0.post223"
-version_tuple = (0, 0, 223)
+version_str = "0.0.post225"
+version_tuple = (0, 0, 225)
 try:
     from packaging.version import Version as V
-    pversion = V("0.0.post223")
+    pversion = V("0.0.post225")
 except ImportError:
     pass
 
 # Data version info
-data_version_str = "0.0.post111"
-data_version_tuple = (0, 0, 111)
+data_version_str = "0.0.post112"
+data_version_tuple = (0, 0, 112)
 try:
     from packaging.version import Version as V
-    pdata_version = V("0.0.post111")
+    pdata_version = V("0.0.post112")
 except ImportError:
     pass
-data_git_hash = "6e800e7b0add6faa13677857e2d3e2ef57aed4dc"
-data_git_describe = "v0.0-111-g6e800e7"
+data_git_hash = "3cb469f8fe451838ee2105842d8d4695a64d234c"
+data_git_describe = "v0.0-112-g3cb469f"
 data_git_msg = """\
-commit 6e800e7b0add6faa13677857e2d3e2ef57aed4dc
-Author: Jean-François Nguyen <jf@lambdaconcept.com>
-Date:   Tue Jun 22 14:41:43 2021 +0200
+commit 3cb469f8fe451838ee2105842d8d4695a64d234c
+Author: Catherine <whitequark@whitequark.org>
+Date:   Sun Dec 12 15:39:03 2021 +0000
 
-    Factor out the gpr.File implementation as a ForwardingMemory.
-    
-    The L1 cache also needs it.
+    nMigen has been renamed to Amaranth HDL.
 
 """
 
 # Tool version info
-tool_version_str = "0.0.post112"
-tool_version_tuple = (0, 0, 112)
+tool_version_str = "0.0.post113"
+tool_version_tuple = (0, 0, 113)
 try:
     from packaging.version import Version as V
-    ptool_version = V("0.0.post112")
+    ptool_version = V("0.0.post113")
 except ImportError:
     pass
 
