@@ -4,30 +4,30 @@ data_location = os.path.join(__dir__, "sources")
 src = "https://github.com/lambdaconcept/minerva"
 
 # Module version
-version_str = "0.0.post234"
-version_tuple = (0, 0, 234)
+version_str = "0.0.post237"
+version_tuple = (0, 0, 237)
 try:
     from packaging.version import Version as V
-    pversion = V("0.0.post234")
+    pversion = V("0.0.post237")
 except ImportError:
     pass
 
 # Data version info
-data_version_str = "0.0.post112"
-data_version_tuple = (0, 0, 112)
+data_version_str = "0.0.post115"
+data_version_tuple = (0, 0, 115)
 try:
     from packaging.version import Version as V
-    pdata_version = V("0.0.post112")
+    pdata_version = V("0.0.post115")
 except ImportError:
     pass
-data_git_hash = "3cb469f8fe451838ee2105842d8d4695a64d234c"
-data_git_describe = "v0.0-112-g3cb469f"
+data_git_hash = "d4a55f23855f43c9a13fa2f7c0f7c1a62242826b"
+data_git_describe = "v0.0-115-gd4a55f2"
 data_git_msg = """\
-commit 3cb469f8fe451838ee2105842d8d4695a64d234c
-Author: Catherine <whitequark@whitequark.org>
-Date:   Sun Dec 12 15:39:03 2021 +0000
+commit d4a55f23855f43c9a13fa2f7c0f7c1a62242826b
+Author: Tobias Müller <Tobias_Mueller@twam.info>
+Date:   Sun Jan 16 11:39:10 2022 +0100
 
-    nMigen has been renamed to Amaranth HDL.
+    Fix nmigen include in cli.py
 
 """
 
