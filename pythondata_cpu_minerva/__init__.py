@@ -1,42 +1,42 @@
 import os.path
 __dir__ = os.path.split(os.path.abspath(os.path.realpath(__file__)))[0]
 data_location = os.path.join(__dir__, "sources")
-src = "https://github.com/lambdaconcept/minerva"
+src = "https://github.com/minerva-cpu/minerva"
 
 # Module version
-version_str = "0.0.post262"
-version_tuple = (0, 0, 262)
+version_str = "0.0.post294"
+version_tuple = (0, 0, 294)
 try:
     from packaging.version import Version as V
-    pversion = V("0.0.post262")
+    pversion = V("0.0.post294")
 except ImportError:
     pass
 
 # Data version info
-data_version_str = "0.0.post120"
-data_version_tuple = (0, 0, 120)
+data_version_str = "0.0.post139"
+data_version_tuple = (0, 0, 139)
 try:
     from packaging.version import Version as V
-    pdata_version = V("0.0.post120")
+    pdata_version = V("0.0.post139")
 except ImportError:
     pass
-data_git_hash = "08251daae42ec8cfc54fb82865a5942727186192"
-data_git_describe = "v0.0-120-g08251da"
+data_git_hash = "d393a7b4367d2d2c1c5d26be03039cdee45010c0"
+data_git_describe = "v0.0-139-gd393a7b"
 data_git_msg = """\
-commit 08251daae42ec8cfc54fb82865a5942727186192
+commit d393a7b4367d2d2c1c5d26be03039cdee45010c0
 Author: Jean-François Nguyen <jf@jfng.fr>
-Date:   Tue Apr 5 15:33:21 2022 +0200
+Date:   Wed Feb 19 19:28:12 2025 +0100
 
-    stage: fix commit 6c3294b9.
+    gpr: remove unused d_{rp1,rp2}_en ports.
 
 """
 
 # Tool version info
-tool_version_str = "0.0.post142"
-tool_version_tuple = (0, 0, 142)
+tool_version_str = "0.0.post155"
+tool_version_tuple = (0, 0, 155)
 try:
     from packaging.version import Version as V
-    ptool_version = V("0.0.post142")
+    ptool_version = V("0.0.post155")
 except ImportError:
     pass
 
