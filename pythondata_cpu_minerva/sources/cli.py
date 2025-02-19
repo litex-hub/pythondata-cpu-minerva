@@ -1,9 +1,57 @@
 import argparse
-import warnings
 from amaranth import cli
+from amaranth.back import rtlil, cxxrtl, verilog
 
 from minerva.core import Minerva
 
+
+__all__ = ["main"]
+
+
+def main_parser(parser=None):
+    if parser is None:
+        parser = argparse.ArgumentParser()
+
+    p_action = parser.add_subparsers(dest="action")
+
+    p_generate = p_action.add_parser("generate",
+            help="generate RTLIL, Verilog or CXXRTL from the design")
+    p_generate.add_argument("-t", "--type",
+            dest="generate_type", metavar="LANGUAGE", choices=["il", "cc", "v"],
+            help="generate LANGUAGE (il for RTLIL, v for Verilog, cc for CXXRTL; "
+                 "default: file extension of FILE, if given)")
+    p_generate.add_argument("--no-src",
+            dest="emit_src", default=True, action="store_false",
+            help="suppress generation of source location attributes")
+    p_generate.add_argument("generate_file",
+            metavar="FILE", type=argparse.FileType("w"), nargs="?",
+            help="write generated code to FILE")
+
+    return parser
+
+
+def main_runner(parser, args, design, name="top"):
+    if args.action == "generate":
+        generate_type = args.generate_type
+        if generate_type is None and args.generate_file:
+            if args.generate_file.name.endswith(".il"):
+                generate_type = "il"
+            if args.generate_file.name.endswith(".cc"):
+                generate_type = "cc"
+            if args.generate_file.name.endswith(".v"):
+                generate_type = "v"
+        if generate_type is None:
+            parser.error("Unable to auto-detect language, specify explicitly with -t/--type")
+        if generate_type == "il":
+            output = rtlil.convert(design, name=name, emit_src=args.emit_src)
+        if generate_type == "cc":
+            output = cxxrtl.convert(design, name=name, emit_src=args.emit_src)
+        if generate_type == "v":
+            output = verilog.convert(design, name=name, emit_src=args.emit_src)
+        if args.generate_file:
+            args.generate_file.write(output)
+        else:
+            print(output)
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -21,12 +69,6 @@ def main():
     parser.add_argument("--with-muldiv",
             default=False, action="store_true",
             help="enable RV32M support")
-    parser.add_argument("--with-debug",
-            default=False, action="store_true",
-            help="enable the Debug Module")
-    parser.add_argument("--with-trigger",
-            default=False, action="store_true",
-            help="enable the Trigger Module")
     parser.add_argument("--with-rvfi",
             default=False, action="store_true",
             help="enable the riscv-formal interface")
@@ -68,17 +110,9 @@ def main():
             type=int, default=8,
             help="write buffer depth")
 
-    trigger_group = parser.add_argument_group("trigger options")
-    trigger_group.add_argument("--nb-triggers",
-            type=int, default=8,
-            help="number of triggers")
-
-    cli.main_parser(parser)
+    main_parser(parser)
 
     args = parser.parse_args()
-
-    if args.with_debug and not args.with_trigger:
-        warnings.warn("Support for hardware breakpoints requires --with-trigger")
 
     cpu = Minerva(args.reset_addr,
             args.with_icache, args.icache_nways, args.icache_nlines, args.icache_nwords,
@@ -87,31 +121,9 @@ def main():
             args.dcache_base, args.dcache_limit,
             args.wrbuf_depth,
             args.with_muldiv,
-            args.with_debug,
-            args.with_trigger, args.nb_triggers,
             args.with_rvfi)
 
-    ports = [
-        cpu.external_interrupt, cpu.timer_interrupt, cpu.software_interrupt,
-        cpu.ibus.ack, cpu.ibus.adr, cpu.ibus.bte, cpu.ibus.cti, cpu.ibus.cyc, cpu.ibus.dat_r,
-        cpu.ibus.dat_w, cpu.ibus.sel, cpu.ibus.stb, cpu.ibus.we, cpu.ibus.err,
-        cpu.dbus.ack, cpu.dbus.adr, cpu.dbus.bte, cpu.dbus.cti, cpu.dbus.cyc, cpu.dbus.dat_r,
-        cpu.dbus.dat_w, cpu.dbus.sel, cpu.dbus.stb, cpu.dbus.we, cpu.dbus.err
-    ]
-
-    if args.with_debug:
-        ports += [cpu.jtag.tck, cpu.jtag.tdi, cpu.jtag.tdo, cpu.jtag.tms]
-
-    if args.with_rvfi:
-        ports += [
-            cpu.rvfi.valid, cpu.rvfi.order, cpu.rvfi.insn, cpu.rvfi.trap, cpu.rvfi.halt,
-            cpu.rvfi.intr, cpu.rvfi.mode, cpu.rvfi.ixl, cpu.rvfi.rs1_addr, cpu.rvfi.rs2_addr,
-            cpu.rvfi.rs1_rdata, cpu.rvfi.rs2_rdata, cpu.rvfi.rd_addr, cpu.rvfi.rd_wdata,
-            cpu.rvfi.pc_rdata, cpu.rvfi.pc_wdata, cpu.rvfi.mem_addr, cpu.rvfi.mem_rmask,
-            cpu.rvfi.mem_wmask, cpu.rvfi.mem_rdata, cpu.rvfi.mem_wdata
-        ]
-
-    cli.main_runner(parser, args, cpu, name="minerva_cpu", ports=ports)
+    main_runner(parser, args, cpu, name="minerva_cpu")
 
 
 if __name__ == "__main__":

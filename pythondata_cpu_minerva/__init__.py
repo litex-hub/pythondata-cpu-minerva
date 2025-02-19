@@ -24,7 +24,7 @@ data_git_hash = "d393a7b4367d2d2c1c5d26be03039cdee45010c0"
 data_git_describe = "v0.0-139-gd393a7b"
 data_git_msg = """\
 commit d393a7b4367d2d2c1c5d26be03039cdee45010c0
-Author: Jean-François Nguyen <jf@jfng.fr>
+Author: Jean-FranÃ§ois Nguyen <jf@jfng.fr>
 Date:   Wed Feb 19 19:28:12 2025 +0100
 
     gpr: remove unused d_{rp1,rp2}_en ports.
